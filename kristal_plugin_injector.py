@@ -152,7 +152,42 @@ def getID(game):
     shutil.rmtree("temp")
     
     return gameid, gameVer
+
+def patchLoader(previewfile):
+    all_lines = []
+    with open(previewfile, "r") as f:
+        all_lines = f.readlines()
     
+    i = 0
+    # look for the preview.init function
+    for line in all_lines:
+        match = re.search(r'function.*:init\((.*)\)', line)
+        if match:
+            new_line = line
+            args = match.group(1)
+            
+            # look at the arguments ft weird no-crash bs
+            mod, button, menu = (args.split(",", 2) + [None, None, None])[:3]
+            # if menu isn't here of them for some reason
+            if not menu:
+                menu = "menu"
+                new_line = line.replace(
+                    args,
+                    ", ".join(
+                        (mod and mod.strip() or "_",
+                         button and button.strip() or "_",
+                         menu)
+                    )
+                )
+            all_lines[i] = new_line
+            all_lines.insert(i+1, "\tMainMenu = MainMenu or menu\n")
+            break
+        i+=1
+    
+    with open(previewfile, "w") as f:
+        f.writelines(all_lines)
+                
+                
 
 def pluginInject(args: argparse.Namespace) -> int:
     # if we have a folder named "plugin", let's just assume it's the right one
@@ -170,6 +205,22 @@ def pluginInject(args: argparse.Namespace) -> int:
         print("Error: no exe or love file found.")
         return 1
     game_id, game_version = getID(gamefile)
+    
+    match = re.search(r'(\d+).(\d+).(\d+)', game_version)
+    verMajor = match.group(1)
+    verMinor = match.group(2)
+    verPatch = match.group(3)
+    
+    # Kristal's main menu was heavily reworked a few days after 0.8.1's release
+    # We'll have to apply some dumb patch on the plugin loader and hope for the best
+    # Note that it won't be a fix for all old versions of Kristal. I'm only trying to make Frozen Heart work
+    if int(verMinor) < 9:
+        print("Version of Kristal uses old main menu. Patching loader...")
+        try:
+            patchLoader(os.path.join(loader_basepath, "preview.lua"))
+        except Exception as e:
+            print(f"Patching failed. Error: {e}")
+            return 1
         
         
         
