@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
+import re
 
 def doesGitExists() -> bool:
     try:
@@ -116,6 +117,43 @@ def downloadLoader() -> bool:
 def IsPath(path):
     return (os.sep in path or (os.name == "nt" and ":" in path)) or os.path.exists(path)
 
+def findGameFile(path, force_love):
+    if os.path.isdir(path):
+        for file in os.listdir(path):
+            if (file.endswith(".exe") and not force_love) or file.endswith(".love"):
+                return os.path.join(path, file)
+                break
+    else:
+        if (path.endswith(".exe") and not args.uselove) or path.endswith(".love"):
+            return args.fangame
+
+def getID(game):
+    gameid, gameVer = None, None
+    with zipfile.ZipFile(game, 'r') as fZip:
+        needed_file = {
+             "VERSION": False,
+             "conf.lua": False
+        }
+        for file_name in fZip.namelist():
+            if all(needed_file.values()):
+                break
+            if file_name == "conf.lua" or file_name == "VERSION":
+                needed_file[file_name] = True
+                fZip.extract(file_name, "temp")
+                
+    with open("temp/conf.lua", "r") as f:
+        for line in f:
+            match = re.search(r't\.identity = "(.*)"', line)
+            if match:
+                gameid = match.group(1)
+                break
+    with open("temp/VERSION", "r") as f:
+        gameVer = f.read()
+    shutil.rmtree("temp")
+    
+    return gameid, gameVer
+    
+
 def pluginInject(args: argparse.Namespace) -> int:
     # if we have a folder named "plugin", let's just assume it's the right one
     if not args.loader and not os.path.exists("plugin"):
@@ -123,13 +161,30 @@ def pluginInject(args: argparse.Namespace) -> int:
             return 1
     loader_basepath = args.loader or "plugin"
     
-    if IsPath(args.fangame):
-        print("damn it's a path")
-    else:
-        print("thank fuck it's an id")
-        appdata_path = os.path.join(os.environ.get("APPDATA"), args.fangame)
-        if not os.path.exists(appdata_path) or args.uselove:
-            appdata_path = os.path.join(os.environ.get("APPDATA"), "LOVE", args.fangame)
+    if not IsPath(args.fangame):
+        print("Error: 'fangame' argument is not a path.")
+        return 1
+        
+    gamefile = findGameFile(args.fangame, args.uselove)
+    if gamefile == None:
+        print("Error: no exe or love file found.")
+        return 1
+    game_id, game_version = getID(gamefile)
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        #TODO: check Linux/Mac
+        #appdata_path = os.path.join(os.environ.get("APPDATA"), args.fangame)
+        #if not os.path.exists(appdata_path) or args.uselove:
+        #    appdata_path = os.path.join(os.environ.get("APPDATA"), "LOVE", args.fangame)
+        
+        #mods_folder = os.path.join(appdata_path, "mods")
         
     return 0
 
