@@ -163,7 +163,6 @@ def patchLoader(previewfile):
     for line in all_lines:
         match = re.search(r'function.*:init\((.*)\)', line)
         if match:
-            new_line = line
             args = match.group(1)
             
             # look at the arguments ft weird no-crash bs
@@ -171,7 +170,7 @@ def patchLoader(previewfile):
             # if menu isn't here of them for some reason
             if not menu:
                 menu = "menu"
-                new_line = line.replace(
+                all_lines[i] = line.replace(
                     args,
                     ", ".join(
                         (mod and mod.strip() or "_",
@@ -179,7 +178,6 @@ def patchLoader(previewfile):
                          menu)
                     )
                 )
-            all_lines[i] = new_line
             all_lines.insert(i+1, "\tMainMenu = MainMenu or menu\n")
             break
         i+=1
