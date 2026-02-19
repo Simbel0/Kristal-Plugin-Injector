@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+import zipfile
 
 def doesGitExists() -> bool:
     try:
@@ -33,7 +34,6 @@ def downloadFromInternet(url) -> bool:
         else:
             return False
         
-    import zipfile
     with requests.get(url, stream=True) as r:        
         with open("plugin.zip", "wb") as f:
             for chunk in r.iter_content(chunk_size=8192):
