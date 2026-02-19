@@ -178,7 +178,7 @@ def patchLoader(previewfile):
                          menu)
                     )
                 )
-            all_lines.insert(i+1, "\tMainMenu = MainMenu or menu\n")
+            all_lines.insert(i+1, "\tlocal MainMenu = MainMenu or menu\n")
             break
         i+=1
     
@@ -219,21 +219,15 @@ def pluginInject(args: argparse.Namespace) -> int:
         except Exception as e:
             print(f"Patching failed. Error: {e}")
             return 1
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        #TODO: check Linux/Mac
-        #appdata_path = os.path.join(os.environ.get("APPDATA"), args.fangame)
-        #if not os.path.exists(appdata_path) or args.uselove:
-        #    appdata_path = os.path.join(os.environ.get("APPDATA"), "LOVE", args.fangame)
-        
-        #mods_folder = os.path.join(appdata_path, "mods")
+    
+    #TODO: check Linux/Mac
+    appdata_path = os.path.join(os.environ.get("APPDATA"), game_id)
+    if args.uselove or not os.path.exists(appdata_path):
+        appdata_path = os.path.join(os.environ.get("APPDATA"), "LOVE", game_id)
+    
+    mods_folder = os.path.join(appdata_path, "mods")
+    
+    shutil.move(loader_basepath, mods_folder)
         
     return 0
 
