@@ -7,6 +7,10 @@ import sys
 import zipfile
 import re
 
+# fuck .git
+def ignore_git(_, names):
+    return ['.git'] if '.git' in names else []
+
 def doesGitExists() -> bool:
     try:
         subprocess.run(
@@ -159,6 +163,7 @@ def patchLoader(previewfile):
         all_lines = f.readlines()
     
     i = 0
+    changes = 3
     # look for the preview.init function
     for line in all_lines:
         match = re.search(r'function.*:init\((.*)\)', line)
@@ -179,17 +184,137 @@ def patchLoader(previewfile):
                     )
                 )
             all_lines.insert(i+1, "\tlocal MainMenu = MainMenu or menu\n")
-            break
+            changes-=1
+        
+        if line.find("MainMenu.mod_list ~= Kristal.PluginLoader.mod_list") >= 0:
+            all_lines[i] = "\tif MainMenu then\n" # what could go wrong?
+            changes-=1
+        elif line.find("Kristal.PluginLoader.mod_list = MainMenu.mod_list") >= 0:
+            all_lines[i] = "\t\tKristal.Plugin.Loader.mod_list = MainMenu.list\n"
+            changes-=1
         i+=1
+        
+        if changes <= 0:
+            break
     
     with open(previewfile, "w") as f:
         f.writelines(all_lines)
                 
-                
+def patchFangame(game, plugin, love):
+    game_name, ext = os.path.splitext(os.path.basename(game))
+    is_exe = ext == ".exe"
+    
+    temp_folder = "temp_"+game_name
+    print("Extract game...")
+    with zipfile.ZipFile(game, 'r') as fZip:
+        fZip.extractall(temp_folder)
+    
+    print("Move hook file in src...")
+    shutil.copy(plugin, os.path.join(temp_folder, "src", "plugin_hook.lua"))
+    
+    print("Change main.lua...")
+    mainfile = os.path.join(temp_folder, "main.lua")
+    
+    all_lines = []
+    with open(mainfile, "r") as f:
+        all_lines = f.readlines()
+    
+    i = 0
+    for line in all_lines:
+        i+=1
+        if line.find("Hotswapper.updateFiles") >= 0:
+            all_lines.insert(i, "\n")
+            all_lines.insert(i+1, 'require("src.plugin_hook")')
+            all_lines.insert(i+2, '\n')
+            break
+        
+    with open(mainfile, "w") as f:
+        f.writelines(all_lines)
+    
+    patched_file = None
+    
+    # One could say it's a bit overkill...
+    # I say why recreate the wheel?
+    if os.path.exists(os.path.join(temp_folder, "build.py")):
+        print("Running original build.py script...")
+        subprocess.run(
+            [
+                sys.executable,
+                os.path.join(temp_folder, "build.py"),
+                "--love", love,
+                "--kristal", os.path.abspath(temp_folder)
+            ]
+        )
+        print("If there's an error, don't mind it. It shouldn't be important for this script.")
+        
+        exe_path = os.path.join("build", "executable")
+        if os.path.exists(exe_path):
+            for file in os.listdir(exe_path):
+                if file.endswith(".exe"):
+                    patched_file = os.path.join(exe_path, file)
+                    break
+    
+    shutil.move(patched_file, game)
+    shutil.rmtree(temp_folder, ignore_errors=True)
+    shutil.rmtree("build")
+    shutil.rmtree("output")
+    return
+    
+    # From this point, a lot of stuff is taken from the build script used by Kristal
+    print("Recompile game...")
+    shutil.make_archive(game_name, 'zip', temp_folder)
+    
+    print("Rename .zip file to .love...")
+    shutil.move(game_name+".zip", game_name+".love")
+    
+    #shutil.rmtree(temp_folder, ignore_errors=True)
+    
+    if not is_exe:
+        return 0 #TODO
+
+    love2d_path = None
+    if love:
+        love2d_path = love
+        print("Using supplied LÖVE path...")
+        if os.path.isfile(os.path.join(love2d_path, "love.exe")):
+            print("LÖVE found!")
+        else:
+            fatal("Error: LÖVE not found at passed directory")
+    else:
+        print("Finding LÖVE...")
+        print("Checking PATH...")
+        path_var = os.getenv('PATH')
+        if path_var is None:
+            print("Error: PATH not found! Please specify the path to LÖVE with --love.")
+            return 1
+        for path in path_var.split(";"):
+            if path == "":
+                continue
+            if os.path.isfile(os.path.join(path, "love.exe")):
+                love2d_path = path
+                print(f"LÖVE found: {path}")
+                break
+        else:
+            print("Error: LÖVE not found! Please specify the path to LÖVE with --love.")
+            return 1
+        
+    print("Compiling into exe...")
+    try:
+        with open(os.path.join(love2d_path, "love.exe"), "rb") as file1, open(game_name+".love", "rb") as file2, open(game_name+"_noicon.exe", "wb") as output:
+            output.write(file1.read())
+            output.write(file2.read())
+    except FileNotFoundError:
+        fatal("Error: LÖVE or Kristal not found!")
+    
+    
 
 def pluginInject(args: argparse.Namespace) -> int:
+    plugin_file = "plugin_new.lua"
+    delete_after_move = False
+    
     # if we have a folder named "plugin", let's just assume it's the right one
     if not args.loader and not os.path.exists("plugin"):
+        delete_after_move = True
         if not downloadLoader():
             return 1
     loader_basepath = args.loader or "plugin"
@@ -213,6 +338,7 @@ def pluginInject(args: argparse.Namespace) -> int:
     # We'll have to apply some dumb patch on the plugin loader and hope for the best
     # Note that it won't be a fix for all old versions of Kristal. I'm only trying to make Frozen Heart work
     if int(verMinor) < 9:
+        plugin_file = "plugin_old.lua"
         print("Version of Kristal uses old main menu. Patching loader...")
         try:
             patchLoader(os.path.join(loader_basepath, "preview.lua"))
@@ -220,6 +346,7 @@ def pluginInject(args: argparse.Namespace) -> int:
             print(f"Patching failed. Error: {e}")
             return 1
     
+    print(f"Moving loader into mods folder of {game_id}...")
     #TODO: check Linux/Mac
     appdata_path = os.path.join(os.environ.get("APPDATA"), game_id)
     if args.uselove or not os.path.exists(appdata_path):
@@ -227,7 +354,18 @@ def pluginInject(args: argparse.Namespace) -> int:
     
     mods_folder = os.path.join(appdata_path, "mods")
     
-    shutil.move(loader_basepath, mods_folder)
+    dest_path = os.path.join(mods_folder, "plugin")
+    if os.path.exists(dest_path):
+        shutil.rmtree(dest_path, ignore_errors=True)
+
+    shutil.copytree(loader_basepath, dest_path, ignore=ignore_git)
+    if delete_after_move:
+        shutil.rmtree(loader_basepath, ignore_errors=True)
+    
+    print(f"Patch fangame...")
+    patchFangame(gamefile, plugin_file, args.love)
+    
+    print("Done!")
         
     return 0
 
@@ -264,6 +402,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Force the program to look for the LOVE release instead of the EXE release."
     )
+    inject_parser.add_argument("--love", help="The path to the LÖVE folder (not the executable). Needed for EXE builds.")
     inject_parser.add_argument("fangame", help="The fangame to inject the Loader into. Can either be a path or a LÖVE2D id.")
     inject_parser.set_defaults(func=pluginInject)
 
