@@ -205,7 +205,6 @@ def patchLoader(previewfile):
 
 def rebuildWithBuildScript(temp_folder, love):
     if os.path.exists(os.path.join(temp_folder, "build.py")):
-        print("Running original build.py script...")
         try:
             subprocess.run(
                 [
@@ -217,8 +216,7 @@ def rebuildWithBuildScript(temp_folder, love):
                 check = True
             )
         except Exception as e:
-            print("It failed. "+e)
-        print("If there's an error, don't mind it. It shouldn't be important for this script.")
+            print(f"An error occured in build.py. If it's about the 'lib' folder being missing, don't worry about it. Otherwise, panic.")
         
         exe_path = os.path.join("build", "executable")
         if os.path.exists(exe_path):
