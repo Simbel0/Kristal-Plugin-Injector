@@ -256,8 +256,8 @@ def patchFangame(game, plugin, love):
     
     shutil.move(patched_file, game)
     shutil.rmtree(temp_folder, ignore_errors=True)
-    shutil.rmtree("build")
-    shutil.rmtree("output")
+    shutil.rmtree("build", ignore_errors=True)
+    shutil.rmtree("output", ignore_errors=True)
     return
     
     # From this point, a lot of stuff is taken from the build script used by Kristal
