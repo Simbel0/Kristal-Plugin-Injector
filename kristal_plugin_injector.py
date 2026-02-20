@@ -163,7 +163,7 @@ def patchLoader(previewfile):
         all_lines = f.readlines()
     
     i = 0
-    changes = 3
+    changes = 4
     # look for the preview.init function
     for line in all_lines:
         match = re.search(r'function.*:init\((.*)\)', line)
@@ -190,7 +190,10 @@ def patchLoader(previewfile):
             all_lines[i] = "\tif MainMenu then\n" # what could go wrong?
             changes-=1
         elif line.find("Kristal.PluginLoader.mod_list = MainMenu.mod_list") >= 0:
-            all_lines[i] = "\t\tKristal.Plugin.Loader.mod_list = MainMenu.list\n"
+            all_lines[i] = "\t\tKristal.PluginLoader.mod_list = MainMenu.list\n"
+            changes-=1
+        elif line.find('state_manager:addState("plugins"') >= 0:
+            all_lines[i] = "\t\tMainMenu.PluginOptions = PluginOptionsHandler(MainMenu)\n"
             changes-=1
         i+=1
         
