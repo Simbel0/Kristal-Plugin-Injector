@@ -117,6 +117,39 @@ def downloadLoader() -> bool:
     print("The Plugin Loader has been downloaded.")
     return True
 
+def downloadLOVE14():
+    import platform
+    is_64 = platform.machine().endswith("64")
+    url = "https://github.com/love2d/love/releases/download/11.4/love-11.4-win"+(is_64 and "64" or "32")+".zip"
+    
+    try:
+        import requests
+    except ImportError:
+        user_answer = input("'requests' is needed to download the ZIP file. Do you want to install it? [Y/N] ")
+        if user_answer.upper() == "Y":
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
+                import requests
+            except Exception as e:
+                print(f"Failed to install 'requests': {e}")
+                return False
+        else:
+            return False
+    
+    print("Downloading LÖVE 11.4...")
+    with requests.get(url, stream=True) as r:        
+        with open("love11.4.zip", "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    
+    print("Extracting files...")
+    with zipfile.ZipFile("love11.4.zip", "r") as zipf:
+        zipf.extractall(".")
+        
+    os.remove("love11.4.zip")
+    return "love-11.4-win"+(is_64 and "64" or "32")
+
 # if it quacks like a path and runs like a path, it's probably a path
 def IsPath(path):
     return (os.sep in path or (os.name == "nt" and ":" in path)) or os.path.exists(path)
@@ -225,7 +258,7 @@ def rebuildWithBuildScript(temp_folder, love):
                     return os.path.join(exe_path, file)
                     break
 
-def rebuildManually(game_name, temp_folder, love):
+def rebuildManually(game_name, temp_folder, love, uselove14):
     print("Recompile game...")
     shutil.make_archive(game_name, 'zip', temp_folder)
     
@@ -233,6 +266,10 @@ def rebuildManually(game_name, temp_folder, love):
     shutil.move(game_name+".zip", game_name+".love")
     
     love2d_path = None
+    
+    if uselove14:
+        love = downloadLOVE14()
+    
     if love:
         love2d_path = love
         print("Using supplied LÖVE path...")
@@ -267,9 +304,12 @@ def rebuildManually(game_name, temp_folder, love):
     except FileNotFoundError:
         print("Error: LÖVE or Kristal not found!")
         return
+    os.remove(game_name+".love")
+    if uselove14:
+        shutil.rmtree("love-11.4-win64")
     return game_name+".exe"
 
-def patchFangame(game, plugin, love):
+def patchFangame(game, plugin, love, uselove14):
     game_name, ext = os.path.splitext(os.path.basename(game))
     is_exe = ext == ".exe"
     
@@ -306,7 +346,7 @@ def patchFangame(game, plugin, love):
     patched_file = rebuildWithBuildScript(temp_folder, love)
     if patched_file == None:
         print("build.py failed or doesn't exist! Trying to build the minimun needed manually...")
-        patched_file = rebuildManually(game_name, temp_folder, love)
+        patched_file = rebuildManually(game_name, temp_folder, love, uselove14)
     if patched_file == None:
         print("Error: could not rebuild the executable.")
         return False
@@ -384,7 +424,7 @@ def pluginInject(args: argparse.Namespace) -> int:
         shutil.rmtree(loader_basepath, ignore_errors=True)
     
     print(f"Patch fangame...")
-    if not patchFangame(gamefile, plugin_file, args.love):
+    if not patchFangame(gamefile, plugin_file, args.love, args.uselove14):
         return 1
     
     print("Done!")
@@ -425,7 +465,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Force the program to look for the LOVE release instead of the EXE release."
     )
     inject_parser.add_argument("--love", help="The path to the LÖVE folder (not the executable). Needed for EXE builds.")
-    inject_parser.add_argument("fangame", help="The fangame to inject the Loader into. Can either be a path or a LÖVE2D id.")
+    inject_parser.add_argument("-14", "--uselove14", action="store_true", help="Download LÖVE 11.4 and recompile the fangame using that instead of the user's version. Use that if your patched exe refuses to run.")
+    inject_parser.add_argument("fangame", help="The path to the fangame to inject the Loader into. (Only the path, not the executable)")
     inject_parser.set_defaults(func=pluginInject)
 
     restore_parser = subparsers.add_parser(
