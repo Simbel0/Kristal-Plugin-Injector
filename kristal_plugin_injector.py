@@ -202,7 +202,75 @@ def patchLoader(previewfile):
     
     with open(previewfile, "w") as f:
         f.writelines(all_lines)
-                
+
+def rebuildWithBuildScript(temp_folder, love):
+    if os.path.exists(os.path.join(temp_folder, "build.py")):
+        print("Running original build.py script...")
+        try:
+            subprocess.run(
+                [
+                    sys.executable,
+                    os.path.join(temp_folder, "build.py"),
+                    "--love", love,
+                    "--kristal", os.path.abspath(temp_folder)
+                ],
+                check = True
+            )
+        except Exception as e:
+            print("It failed. "+e)
+        print("If there's an error, don't mind it. It shouldn't be important for this script.")
+        
+        exe_path = os.path.join("build", "executable")
+        if os.path.exists(exe_path):
+            for file in os.listdir(exe_path):
+                if file.endswith(".exe"):
+                    return os.path.join(exe_path, file)
+                    break
+
+def rebuildManually(game_name, temp_folder, love):
+    print("Recompile game...")
+    shutil.make_archive(game_name, 'zip', temp_folder)
+    
+    print("Rename .zip file to .love...")
+    shutil.move(game_name+".zip", game_name+".love")
+    
+    love2d_path = None
+    if love:
+        love2d_path = love
+        print("Using supplied LÖVE path...")
+        if os.path.isfile(os.path.join(love2d_path, "love.exe")):
+            print("LÖVE found!")
+        else:
+            print("Error: LÖVE not found at passed directory")
+            return
+    else:
+        print("Finding LÖVE...")
+        print("Checking PATH...")
+        path_var = os.getenv('PATH')
+        if path_var is None:
+            print("Error: PATH not found! Please specify the path to LÖVE with --love.")
+            return 
+        for path in path_var.split(";"):
+            if path == "":
+                continue
+            if os.path.isfile(os.path.join(path, "love.exe")):
+                love2d_path = path
+                print(f"LÖVE found: {path}")
+                break
+        else:
+            print("Error: LÖVE not found! Please specify the path to LÖVE with --love.")
+            return
+        
+    print("Compiling into exe...")
+    try:
+        with open(os.path.join(love2d_path, "love.exe"), "rb") as file1, open(game_name+".love", "rb") as file2, open(game_name+".exe", "wb") as output:
+            output.write(file1.read())
+            output.write(file2.read())
+    except FileNotFoundError:
+        print("Error: LÖVE or Kristal not found!")
+        return
+    return game_name+".exe"
+
 def patchFangame(game, plugin, love):
     game_name, ext = os.path.splitext(os.path.basename(game))
     is_exe = ext == ".exe"
@@ -234,82 +302,27 @@ def patchFangame(game, plugin, love):
     with open(mainfile, "w") as f:
         f.writelines(all_lines)
     
-    patched_file = None
-    
     # One could say it's a bit overkill...
     # I say why recreate the wheel?
-    if os.path.exists(os.path.join(temp_folder, "build.py")):
-        print("Running original build.py script...")
-        subprocess.run(
-            [
-                sys.executable,
-                os.path.join(temp_folder, "build.py"),
-                "--love", love,
-                "--kristal", os.path.abspath(temp_folder)
-            ]
-        )
-        print("If there's an error, don't mind it. It shouldn't be important for this script.")
-        
-        exe_path = os.path.join("build", "executable")
-        if os.path.exists(exe_path):
-            for file in os.listdir(exe_path):
-                if file.endswith(".exe"):
-                    patched_file = os.path.join(exe_path, file)
-                    break
+    print("Trying to run the original build.py script...")
+    patched_file = rebuildWithBuildScript(temp_folder, love)
+    if patched_file == None:
+        print("build.py failed or doesn't exist! Trying to build the minimun needed manually...")
+        patched_file = rebuildManually(game_name, temp_folder, love)
+    if patched_file == None:
+        print("Error: could not rebuild the executable.")
+        return False
     
     shutil.move(patched_file, game)
     shutil.rmtree(temp_folder, ignore_errors=True)
     shutil.rmtree("build", ignore_errors=True)
     shutil.rmtree("output", ignore_errors=True)
-    return
-    
-    # From this point, a lot of stuff is taken from the build script used by Kristal
-    print("Recompile game...")
-    shutil.make_archive(game_name, 'zip', temp_folder)
-    
-    print("Rename .zip file to .love...")
-    shutil.move(game_name+".zip", game_name+".love")
+    return True
     
     #shutil.rmtree(temp_folder, ignore_errors=True)
     
     if not is_exe:
-        return 0 #TODO
-
-    love2d_path = None
-    if love:
-        love2d_path = love
-        print("Using supplied LÖVE path...")
-        if os.path.isfile(os.path.join(love2d_path, "love.exe")):
-            print("LÖVE found!")
-        else:
-            fatal("Error: LÖVE not found at passed directory")
-    else:
-        print("Finding LÖVE...")
-        print("Checking PATH...")
-        path_var = os.getenv('PATH')
-        if path_var is None:
-            print("Error: PATH not found! Please specify the path to LÖVE with --love.")
-            return 1
-        for path in path_var.split(";"):
-            if path == "":
-                continue
-            if os.path.isfile(os.path.join(path, "love.exe")):
-                love2d_path = path
-                print(f"LÖVE found: {path}")
-                break
-        else:
-            print("Error: LÖVE not found! Please specify the path to LÖVE with --love.")
-            return 1
-        
-    print("Compiling into exe...")
-    try:
-        with open(os.path.join(love2d_path, "love.exe"), "rb") as file1, open(game_name+".love", "rb") as file2, open(game_name+"_noicon.exe", "wb") as output:
-            output.write(file1.read())
-            output.write(file2.read())
-    except FileNotFoundError:
-        fatal("Error: LÖVE or Kristal not found!")
-    
-    
+        return 0 #TODO    
 
 def pluginInject(args: argparse.Namespace) -> int:
     plugin_file = "plugin_new.lua"
@@ -347,9 +360,12 @@ def pluginInject(args: argparse.Namespace) -> int:
             patchLoader(os.path.join(loader_basepath, "preview.lua"))
         except Exception as e:
             print(f"Patching failed. Error: {e}")
+            shutil.rmtree(loader_basepath, ignore_errors=True)
             return 1
     
     print(f"Moving loader into mods folder of {game_id}...")
+    if game_id == "kristal":
+        print('WARNING: the game id is "kristal"! Which means this script will replace the version you already have if you placed one there! It may also affect you if you have the plugin loader loaded in the source code!')
     #TODO: check Linux/Mac
     appdata_path = os.path.join(os.environ.get("APPDATA"), game_id)
     if args.uselove or not os.path.exists(appdata_path):
@@ -359,6 +375,10 @@ def pluginInject(args: argparse.Namespace) -> int:
     
     dest_path = os.path.join(mods_folder, "plugin")
     if os.path.exists(dest_path):
+        if input(f"{dest_path} already exists. Replace it?").upper() == "N":
+            print("Error: Cannot continue further.")
+            shutil.rmtree(loader_basepath, ignore_errors=True)
+            return 1
         shutil.rmtree(dest_path, ignore_errors=True)
 
     shutil.copytree(loader_basepath, dest_path, ignore=ignore_git)
@@ -366,7 +386,8 @@ def pluginInject(args: argparse.Namespace) -> int:
         shutil.rmtree(loader_basepath, ignore_errors=True)
     
     print(f"Patch fangame...")
-    patchFangame(gamefile, plugin_file, args.love)
+    if not patchFangame(gamefile, plugin_file, args.love):
+        return 1
     
     print("Done!")
         
