@@ -351,6 +351,7 @@ def patchFangame(game, plugin, love, uselove14):
         print("Error: could not rebuild the executable.")
         return False
     
+    shutil.move(game, os.path.join(os.path.dirname(game), game_name+".normal"))
     shutil.move(patched_file, game)
     shutil.rmtree(temp_folder, ignore_errors=True)
     shutil.rmtree("build", ignore_errors=True)
