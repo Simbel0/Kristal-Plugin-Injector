@@ -423,6 +423,8 @@ def pluginInject(args: argparse.Namespace) -> int:
     shutil.copytree(loader_basepath, dest_path, ignore=ignore_git)
     if delete_after_move:
         shutil.rmtree(loader_basepath, ignore_errors=True)
+        if os.path.exists(loader_basepath):
+            print("WARNING: 'plugin' folder could not be fully deleted, possibly due to the .git folder. Make sure to remove it before starting this script the next time.")
     
     print(f"Patch fangame...")
     if not patchFangame(gamefile, plugin_file, args.love, args.uselove14):
