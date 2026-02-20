@@ -259,10 +259,10 @@ def rebuildWithBuildScript(temp_folder, love):
                     break
 
 def rebuildManually(game_name, temp_folder, love, uselove14):
-    print("Recompile game...")
+    print("Recompiling game...")
     shutil.make_archive(game_name, 'zip', temp_folder)
     
-    print("Rename .zip file to .love...")
+    print("Renaming .zip file to .love...")
     shutil.move(game_name+".zip", game_name+".love")
     
     love2d_path = None
@@ -314,14 +314,14 @@ def patchFangame(game, plugin, love, uselove14):
     is_exe = ext == ".exe"
     
     temp_folder = "temp_"+game_name
-    print("Extract game...")
+    print("Extracting game...")
     with zipfile.ZipFile(game, 'r') as fZip:
         fZip.extractall(temp_folder)
     
-    print("Move hook file in src...")
+    print("Moving hook file in src...")
     shutil.copy(plugin, os.path.join(temp_folder, "src", "plugin_hook.lua"))
     
-    print("Change main.lua...")
+    print("Changing main.lua...")
     mainfile = os.path.join(temp_folder, "main.lua")
     
     all_lines = []
@@ -426,7 +426,7 @@ def pluginInject(args: argparse.Namespace) -> int:
         if os.path.exists(loader_basepath):
             print("WARNING: 'plugin' folder could not be fully deleted, possibly due to the .git folder. Make sure to remove it before starting this script the next time.")
     
-    print(f"Patch fangame...")
+    print(f"Patching fangame...")
     if not patchFangame(gamefile, plugin_file, args.love, args.uselove14):
         return 1
     
