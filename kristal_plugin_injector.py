@@ -278,7 +278,7 @@ def rebuildWithBuildScript(temp_folder, love):
                 check = True
             )
         except Exception as e:
-            print(f"An error occured in build.py. If it's about the 'lib' folder being missing, don't worry about it. Otherwise, panic.")
+            print(f"An error occured in build.py. If it's about the 'lib' folder or the example mod being missing, don't worry about it. Otherwise, panic.")
         finally:
             os.remove("temp_build.py")
         
