@@ -357,6 +357,8 @@ def patchFangame(game, plugin, love, uselove14):
     print("Changing main.lua...")
     mainfile = os.path.join(temp_folder, "main.lua")
     
+    shutil.copy(mainfile, os.path.join(temp_folder, "main.normal"))
+    
     all_lines = []
     with open(mainfile, "r") as f:
         all_lines = f.readlines()
