@@ -236,13 +236,37 @@ def patchLoader(previewfile):
     with open(previewfile, "w") as f:
         f.writelines(all_lines)
 
+def patchBuildScript(og_file, final_file):
+    all_lines = []
+    with open(og_file, "r") as f:
+        all_lines = f.readlines()
+    
+    in_ignore_list = False
+    for line in all_lines:
+        if not in_ignore_list:
+            if re.search(r"ignorefiles.*\[", line):
+                in_ignore_list = True
+        else:
+            if line.find("mods") >= 0:
+                all_lines.remove(line)
+                break
+            elif line.find("]") >= 0:
+                # nothing to remove I guess
+                break
+            
+    with open(final_file, "w") as f:
+        f.writelines(all_lines)
+            
+
 def rebuildWithBuildScript(temp_folder, love):
-    if os.path.exists(os.path.join(temp_folder, "build.py")):
+    build_file = os.path.join(temp_folder, "build.py")
+    if os.path.exists(build_file):
+        patchBuildScript(build_file, "temp_build.py")
         try:
             subprocess.run(
                 [
                     sys.executable,
-                    os.path.join(temp_folder, "build.py"),
+                    "temp_build.py",
                     "--love", love,
                     "--kristal", os.path.abspath(temp_folder)
                 ],
@@ -250,13 +274,14 @@ def rebuildWithBuildScript(temp_folder, love):
             )
         except Exception as e:
             print(f"An error occured in build.py. If it's about the 'lib' folder being missing, don't worry about it. Otherwise, panic.")
+        finally:
+            os.remove("temp_build.py")
         
         exe_path = os.path.join("build", "executable")
         if os.path.exists(exe_path):
             for file in os.listdir(exe_path):
                 if file.endswith(".exe"):
                     return os.path.join(exe_path, file)
-                    break
 
 def rebuildManually(game_name, temp_folder, love, uselove14):
     print("Recompiling game...")
