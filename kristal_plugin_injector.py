@@ -236,6 +236,11 @@ def patchLoader(previewfile):
     with open(previewfile, "w") as f:
         f.writelines(all_lines)
 
+def getPythonExec():
+    if not getattr(sys, "frozen", False):
+        return sys.executable
+    return "py" if os.name == "nt" else "python3"
+
 def patchBuildScript(og_file, final_file):
     all_lines = []
     with open(og_file, "r") as f:
@@ -265,7 +270,7 @@ def rebuildWithBuildScript(temp_folder, love):
         try:
             subprocess.run(
                 [
-                    sys.executable,
+                    getPythonExec(),
                     "temp_build.py",
                     "--love", love,
                     "--kristal", os.path.abspath(temp_folder)
@@ -342,6 +347,9 @@ def patchFangame(game, plugin, love, uselove14):
     print("Extracting game...")
     with zipfile.ZipFile(game, 'r') as fZip:
         fZip.extractall(temp_folder)
+    
+    if getattr(sys, "frozen", False):
+        plugin = os.path.join(sys._MEIPASS, plugin)
     
     print("Moving hook file in src...")
     shutil.copy(plugin, os.path.join(temp_folder, "src", "plugin_hook.lua"))
