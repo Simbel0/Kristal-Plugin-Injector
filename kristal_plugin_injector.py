@@ -235,6 +235,40 @@ def patchLoader(previewfile):
     
     with open(previewfile, "w") as f:
         f.writelines(all_lines)
+        
+def patchLoaderAssets(previewfile):
+    all_lines = []
+    with open(previewfile, "r") as f:
+        all_lines = f.readlines()
+    
+    old_code = [
+        "\tlocal load_count = 1\n",
+        "\tfor _, _ in pairs(mod.libs) do\n",
+        "\t\tload_count = load_count + 1\n",
+        "\tend\n"
+    ]
+    
+    old_code2 = [
+        "\tfor _, lib in pairs(mod.libs) do\n",
+        '\t\tKristal.loadAssets(lib.path, asset_type or "all", asset_paths or "", finishLoadStep)\n'
+    ]
+    
+    i = 0
+    for line in all_lines:
+        i+=1
+        if re.search(r"load_count.*\+\s*\#mod\.lib_order", line):
+            all_lines[i-1] = old_code[0]
+            all_lines.insert(i, old_code[1])
+            all_lines.insert(i+1, old_code[2])
+            all_lines.insert(i+2, old_code[3])
+            
+        if re.search("for.*mod\.lib_order.*do", line):
+            all_lines[i-1] = old_code2[0]
+            all_lines[i]   = old_code2[1]
+            break
+        
+    with open(previewfile, "w") as f:
+        f.writelines(all_lines)
 
 def getPythonExec():
     if not getattr(sys, "frozen", False):
@@ -432,6 +466,7 @@ def pluginInject(args: argparse.Namespace) -> int:
         print("Version of Kristal uses old main menu. Patching loader...")
         try:
             patchLoader(os.path.join(loader_basepath, "preview.lua"))
+            patchLoaderAssets(os.path.join(loader_basepath, "assetsloader.lua"))
         except Exception as e:
             print(f"Patching failed. Error: {e}")
             shutil.rmtree(loader_basepath, ignore_errors=True)
